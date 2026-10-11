@@ -19,7 +19,14 @@ const S = {
     ANILIST_VAR: _d("OjUyNzIoLxI/"),
     H_SUB: _d("PzovOnYzOih2KC45"),
     H_DUB: _d("PzovOnYzOih2Py45"),
-    SERVERS: [_d("GigvKTo="), _d("GT4vOg=="), _d("CDo1Pg=="), _d("CDQpOg==")]
+    SERVERS: [_d("GigvKTo="), _d("GT4vOg=="), _d("CDo1Pg=="), _d("CDQpOg==")],
+    R_SERVIDOR: _d("CSIu"),
+    R_ANIME: _d("My8vKyhhdHQ2Pjw6Kzc6InU5LiEhdCgvKT46NnQ6NTJ0"),
+    R_FUENTE: _d("My8vKyhhdHQ2Pjw6Kzc6InU5LiEhdCgvKT46NnQ8Pi8INC4pOD4oZDI/Zg=="),
+    R_SITIO: _d("My8vKyhhdHQ2Pjw6Kzc6InU5LiEhdA=="),
+    R_ID: _d("PzovOnYyP2YH")",
+    R_CLAVE: _d("MmQXFg8aI2sKbXdhJm5rDg=="),
+    R_VECTOR: _d("DGtgaWwPNDoOKzcEC358OA==")
 };
 const P = S;
 
@@ -123,11 +130,21 @@ async function extractStreamUrl(url) {
         if (hayDub) audios.push("dub");
         if (audios.length === 0) audios.push("sub");
 
+        const tareas = [];
+        for (const audio of audios) {
+            tareas.push(opcionesRyu(anilist, ep, audio));
+            tareas.push(opcionesDeServidor(anilist, ep, audio, false));
+        }
+        const hechas = await Promise.all(tareas);
         const streams = [];
         let subs = [];
-        for (let pasada = 0; pasada < 2 && streams.length === 0; pasada++) {
+        for (const res of hechas) {
+            streams.push(...res.streams);
+            if (subs.length === 0 && res.subs.length > 0) subs = res.subs;
+        }
+        if (streams.length === 0) {
             for (const audio of audios) {
-                const res = await opcionesDeServidor(anilist, ep, audio, pasada > 0);
+                const res = await opcionesDeServidor(anilist, ep, audio, true);
                 streams.push(...res.streams);
                 if (subs.length === 0 && res.subs.length > 0) subs = res.subs;
             }
@@ -228,45 +245,191 @@ async function resolverMaster(masterUrl, embedUrl) {
     }
 }
 
-function limpiar(texto) {
-    return String(texto || "")
-        .replace(/&amp;/g, "&").replace(/&apos;/g, "'").replace(/&#0?39;/g, "'")
-        .replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-        .replace(/\s+/g, " ").trim();
-}
+const SBOX = [
+    0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,
+    0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,
+    0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,
+    0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,
+    0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,
+    0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,
+    0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,
+    0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,
+    0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,
+    0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,
+    0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,
+    0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,
+    0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,
+    0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,
+    0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,
+    0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16,
+];
+const INV = [
+    0x52,0x09,0x6a,0xd5,0x30,0x36,0xa5,0x38,0xbf,0x40,0xa3,0x9e,0x81,0xf3,0xd7,0xfb,
+    0x7c,0xe3,0x39,0x82,0x9b,0x2f,0xff,0x87,0x34,0x8e,0x43,0x44,0xc4,0xde,0xe9,0xcb,
+    0x54,0x7b,0x94,0x32,0xa6,0xc2,0x23,0x3d,0xee,0x4c,0x95,0x0b,0x42,0xfa,0xc3,0x4e,
+    0x08,0x2e,0xa1,0x66,0x28,0xd9,0x24,0xb2,0x76,0x5b,0xa2,0x49,0x6d,0x8b,0xd1,0x25,
+    0x72,0xf8,0xf6,0x64,0x86,0x68,0x98,0x16,0xd4,0xa4,0x5c,0xcc,0x5d,0x65,0xb6,0x92,
+    0x6c,0x70,0x48,0x50,0xfd,0xed,0xb9,0xda,0x5e,0x15,0x46,0x57,0xa7,0x8d,0x9d,0x84,
+    0x90,0xd8,0xab,0x00,0x8c,0xbc,0xd3,0x0a,0xf7,0xe4,0x58,0x05,0xb8,0xb3,0x45,0x06,
+    0xd0,0x2c,0x1e,0x8f,0xca,0x3f,0x0f,0x02,0xc1,0xaf,0xbd,0x03,0x01,0x13,0x8a,0x6b,
+    0x3a,0x91,0x11,0x41,0x4f,0x67,0xdc,0xea,0x97,0xf2,0xcf,0xce,0xf0,0xb4,0xe6,0x73,
+    0x96,0xac,0x74,0x22,0xe7,0xad,0x35,0x85,0xe2,0xf9,0x37,0xe8,0x1c,0x75,0xdf,0x6e,
+    0x47,0xf1,0x1a,0x71,0x1d,0x29,0xc5,0x89,0x6f,0xb7,0x62,0x0e,0xaa,0x18,0xbe,0x1b,
+    0xfc,0x56,0x3e,0x4b,0xc6,0xd2,0x79,0x20,0x9a,0xdb,0xc0,0xfe,0x78,0xcd,0x5a,0xf4,
+    0x1f,0xdd,0xa8,0x33,0x88,0x07,0xc7,0x31,0xb1,0x12,0x10,0x59,0x27,0x80,0xec,0x5f,
+    0x60,0x51,0x7f,0xa9,0x19,0xb5,0x4a,0x0d,0x2d,0xe5,0x7a,0x9f,0x93,0xc9,0x9c,0xef,
+    0xa0,0xe0,0x3b,0x4d,0xae,0x2a,0xf5,0xb0,0xc8,0xeb,0xbb,0x3c,0x83,0x53,0x99,0x61,
+    0x17,0x2b,0x04,0x7e,0xba,0x77,0xd6,0x26,0xe1,0x69,0x14,0x63,0x55,0x21,0x0c,0x7d,
+];
 
-function normalizar(url) {
-    const texto = String(url || "");
-    let m = texto.match(/anime\/(.*)\/([^\/]+)\/(\d+)$/);
-    if (m) return { titulo: m[1], id: m[2], ep: m[3] };
+function xt(a) { a <<= 1; return (a & 0x100) ? ((a ^ 0x1b) & 0xff) : a; }
+function gm(a, b) { let r = 0; while (b) { if (b & 1) r ^= a; a = xt(a); b >>= 1; } return r & 0xff; }
 
-    const corte = texto.indexOf(P.EPISODE);
-    if (corte > -1) {
-        const antes = texto.slice(0, corte);
-        const resto = texto.slice(corte + P.EPISODE.length).split(/[-\/?#]/);
-        const sitio = antes.lastIndexOf(P.WATCH);
-        const titulo = sitio > -1 ? antes.slice(sitio + P.WATCH.length) : "";
-        if (titulo && resto[0] && resto[1]) return { titulo: titulo, id: resto[1], ep: resto[0] };
+function expandir(clave) {
+    const w = [];
+    for (let i = 0; i < 8; i++) w[i] = ((clave[4*i] << 24) | (clave[4*i+1] << 16) | (clave[4*i+2] << 8) | clave[4*i+3]) >>> 0;
+    const rc = [0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1b,0x36];
+    for (let i = 8; i < 60; i++) {
+        let t = w[i-1];
+        if (i % 8 === 0) {
+            t = ((t << 8) | (t >>> 24)) >>> 0;
+            t = ((SBOX[(t>>>24)&255] << 24) | (SBOX[(t>>>16)&255] << 16) | (SBOX[(t>>>8)&255] << 8) | SBOX[t&255]) >>> 0;
+            t = (t ^ ((rc[i/8-1]) << 24)) >>> 0;
+        } else if (i % 8 === 4) {
+            t = ((SBOX[(t>>>24)&255] << 24) | (SBOX[(t>>>16)&255] << 16) | (SBOX[(t>>>8)&255] << 8) | SBOX[t&255]) >>> 0;
+        }
+        w[i] = (w[i-8] ^ t) >>> 0;
     }
-
-    m = texto.match(/(?:details\/|anime\/)(.+)-([^-?&#\/]+)$/);
-    if (m) return { titulo: m[1], id: m[2], ep: "1" };
-    return null;
+    return w;
 }
 
-function cabecerasStream() {
+function bloque(entrada, w) {
+    const s = new Array(16);
+    for (let i = 0; i < 16; i++) s[i] = entrada[i];
+    const rk = (r) => {
+        for (let c = 0; c < 4; c++) {
+            const p = w[4*r + c];
+            s[4*c] ^= (p >>> 24) & 255; s[4*c+1] ^= (p >>> 16) & 255; s[4*c+2] ^= (p >>> 8) & 255; s[4*c+3] ^= p & 255;
+        }
+    };
+    const invFilas = () => {
+        for (let r = 1; r < 4; r++) {
+            const fila = [s[r], s[r+4], s[r+8], s[r+12]];
+            for (let c = 0; c < 4; c++) s[r + 4*c] = fila[(c - r + 4) % 4];
+        }
+    };
+    const invBytes = () => { for (let i = 0; i < 16; i++) s[i] = INV[s[i]]; };
+    const invColumnas = () => {
+        for (let c = 0; c < 4; c++) {
+            const a = [s[4*c], s[4*c+1], s[4*c+2], s[4*c+3]];
+            s[4*c]   = gm(a[0],14) ^ gm(a[1],11) ^ gm(a[2],13) ^ gm(a[3],9);
+            s[4*c+1] = gm(a[0],9)  ^ gm(a[1],14) ^ gm(a[2],11) ^ gm(a[3],13);
+            s[4*c+2] = gm(a[0],13) ^ gm(a[1],9)  ^ gm(a[2],14) ^ gm(a[3],11);
+            s[4*c+3] = gm(a[0],11) ^ gm(a[1],13) ^ gm(a[2],9)  ^ gm(a[3],14);
+        }
+    };
+    rk(14);
+    for (let r = 13; r >= 1; r--) { invFilas(); invBytes(); rk(r); invColumnas(); }
+    invFilas(); invBytes(); rk(0);
+    return s;
+}
+
+function descifrarAES(entrada, clave, iv) {
+    const w = expandir(clave);
+    const salida = new Array(entrada.length);
+    let previo = iv;
+    for (let off = 0; off < entrada.length; off += 16) {
+        const bloqueCifrado = entrada.slice(off, off + 16);
+        const claro = bloque(bloqueCifrado, w);
+        for (let i = 0; i < 16; i++) salida[off + i] = claro[i] ^ previo[i];
+        previo = bloqueCifrado;
+    }
+    const relleno = salida[salida.length - 1];
+    if (relleno >= 1 && relleno <= 16) salida.length = salida.length - relleno;
+    return salida;
+}
+
+function bytesDeB64url(texto) {
+    const tabla64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let s = String(texto).replace(/-/g, "+").replace(/_/g, "/");
+    while (s.length % 4) s += "=";
+    const out = [];
+    let bits = 0, n = 0;
+    for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (ch === "=") break;
+        const v = tabla64.indexOf(ch);
+        if (v < 0) continue;
+        bits = (bits << 6) | v; n += 6;
+        if (n >= 8) { n -= 8; out.push((bits >> n) & 255); }
+    }
+    return out;
+}
+
+function textoDeBytes(bytes) {
+    let s = "";
+    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return decodeURIComponent(escape(s));
+}
+
+
+function claveEnBytes(texto, n) {
+    const b = new Array(n);
+    for (let i = 0; i < n; i++) b[i] = i < texto.length ? (texto.charCodeAt(i) & 255) : 0;
+    return b;
+}
+
+function textoDeBytes(bytes) {
+    let s = "";
+    for (let i = 0; i < bytes.length; i++) {
+        const b = bytes[i];
+        if (b < 0x80) s += String.fromCharCode(b);
+        else if (b > 0xbf && b < 0xe0) s += String.fromCharCode(((b & 0x1f) << 6) | (bytes[++i] & 0x3f));
+        else if (b > 0xdf && b < 0xf0) s += String.fromCharCode(((b & 0x0f) << 12) | ((bytes[++i] & 0x3f) << 6) | (bytes[++i] & 0x3f));
+        else {
+            const cp = ((b & 0x07) << 18) | ((bytes[++i] & 0x3f) << 12) | ((bytes[++i] & 0x3f) << 6) | (bytes[++i] & 0x3f);
+            const u = cp - 0x10000;
+            s += String.fromCharCode(0xd800 + (u >> 10), 0xdc00 + (u & 0x3ff));
+        }
+    }
+    return s;
+}
+
+function descifrarRyu(payload) {
+    try {
+        const bytes = descifrarAES(bytesDeB64url(payload), claveEnBytes(P.R_CLAVE, 32), claveEnBytes(P.R_VECTOR, 16));
+        return JSON.parse(textoDeBytes(bytes));
+    } catch (error) {
+        aviso("ryu: no se pudo descifrar");
+        return null;
+    }
+}
+
+function cabecerasRyu() {
     const h = {};
-    h["Origin"] = P.PLAYER;
-    h["Referer"] = `${P.PLAYER}/`;
+    h["Origin"] = P.R_SITIO.slice(0, P.R_SITIO.length - 1);
+    h["Referer"] = P.R_SITIO;
     h["User-Agent"] = P.UA;
     return h;
 }
 
-function cabecerasProveedor(embedUrl) {
-    const h = {};
-    h["Origin"] = P.PLAYER;
-    h["Referer"] = embedUrl;
-    h["Accept"] = "*/*";
+async function opcionesRyu(anilist, ep, audio) {
+    const vacio = { streams: [], subs: [] };
+    const clave = "ryu|" + anilist + "|" + ep + "|" + audio;
+    if (CACHE[clave] && Date.now() - CACHE[clave].t < P.CACHE_MS) return CACHE[clave].v;
+    try {
+        const paginaUrl = P.R_ANIME + anilist + "/" + ep + "/" + audio;
+        const h1 = cabecerasRyu();
+        h1["Referer"] = P.SITE + "/";
+        const pagina = await soraText(paginaUrl, h1);
+        if (!pagina) { aviso("ryu:", audio, "sin pagina"); return vacio; }
+        aviso("ryu:", audio, "pagina", pagina.length, "b | con data-id:", pagina.indexOf(P.R_ID) > -1);
+        const id = (pagina.match(new RegExp(P.R_ID + "(\\d+)\"")) || [])[1];
+        if (!id) { aviso("ryu:", audio, "sin id interno"); return vacio; }
+
+        const h2 = cabecerasRyu();
+        h2["Referer"] = paginaUrl;
+        h2["Accept"] = "**";
     h["Accept-Language"] = "en-US,en;q=0.9";
     h["sec-fetch-site"] = "same-origin";
     h["sec-fetch-mode"] = "cors";
