@@ -23,6 +23,10 @@ const S = {
 };
 const P = S;
 
+function aviso() {
+    console.log("G: " + Array.prototype.slice.call(arguments).join(" "));
+}
+
 async function searchResults(keyword) {
     try {
         const html = await soraText(`${P.SITE}${P.SEARCH_Q}${encodeURIComponent(keyword)}`);
@@ -39,10 +43,10 @@ async function searchResults(keyword) {
             out.push({ title: limpiar(title) || "Sin titulo", image: img, href: `anime/${slug}` });
             if (out.length >= 30) break;
         }
-        if (out.length === 0) console.log("busqueda: sin tarjetas en la respuesta");
+        if (out.length === 0) aviso("busqueda: sin tarjetas en la respuesta");
         return JSON.stringify(out);
     } catch (error) {
-        console.log("busqueda: error");
+        aviso("busqueda: error");
         return JSON.stringify([]);
     }
 }
@@ -64,7 +68,7 @@ async function extractDetails(url) {
             airdate: aired ? `Emitido: ${limpiar(aired)}` : ""
         }]);
     } catch (error) {
-        console.log("ficha: error");
+        aviso("ficha: error");
         return JSON.stringify([{ description: "Sin descripcion", aliases: "", airdate: "" }]);
     }
 }
@@ -88,27 +92,27 @@ async function extractEpisodes(url) {
                 title: ""
             });
         }
-        console.log(`episodios: ${out.length} (sub y dub por episodio incluidos)`);
+        aviso(`episodios: ${out.length} (sub y dub por episodio incluidos)`);
         return JSON.stringify(out);
     } catch (error) {
-        console.log("episodios: error");
+        aviso("episodios: error");
         return JSON.stringify([]);
     }
 }
 
 async function extractStreamUrl(url) {
-    console.log("fuente: piden", String(url).slice(0, 150));
+    aviso("fuente: piden", String(url).slice(0, 150));
     try {
         const partes = normalizar(url);
-        if (!partes) { console.log("fuente: direccion no reconocida"); return null; }
+        if (!partes) { aviso("fuente: direccion no reconocida"); return null; }
         const titulo = partes.titulo, id = partes.id, ep = partes.ep;
 
         const watch = `${P.SITE}${P.WATCH}${titulo}${P.EPISODE}${ep}-${id}`;
         const html = await soraText(watch);
-        if (!html) { console.log("fuente: pagina sin respuesta"); return null; }
+        if (!html) { aviso("fuente: pagina sin respuesta"); return null; }
 
         const anilist = (html.match(new RegExp("var\\s+" + P.ANILIST_VAR + "\\s*=\\s*(\\d+)")) || [])[1];
-        if (!anilist) { console.log("fuente: sin id de catalogo"); return null; }
+        if (!anilist) { aviso("fuente: sin id de catalogo"); return null; }
 
         const bloqueEp = html.split(`data-episode="${ep}"`)[1] || "";
         const haySub = ((bloqueEp.match(new RegExp(P.H_SUB + '="(\\d)"')) || [])[1] || "0") === "1";
@@ -129,14 +133,14 @@ async function extractStreamUrl(url) {
             }
         }
 
-        if (streams.length === 0) { console.log("fuente: el proveedor no devolvio opciones"); return null; }
-        console.log(`fuente: ${streams.length} opciones (sub/dub)`);
+        if (streams.length === 0) { aviso("fuente: el proveedor no devolvio opciones"); return null; }
+        aviso(`fuente: ${streams.length} opciones (sub/dub)`);
 
         const salida = { streams: streams };
         if (subs.length > 0) salida.subtitles = subs;
         return JSON.stringify(salida);
     } catch (error) {
-        console.log("fuente: error");
+        aviso("fuente: error");
         return null;
     }
 }
@@ -147,15 +151,16 @@ async function opcionesDeServidor(anilist, ep, audio, forzar) {
     const vacio = { streams: [], subs: [] };
     const clave = `${anilist}|${ep}|${audio}`;
     if (!forzar && CACHE[clave] && Date.now() - CACHE[clave].t < P.CACHE_MS) {
-        console.log("fuente:", audio, "de la memoria del dia");
+        aviso("fuente:", audio, "de la memoria del dia");
         return CACHE[clave].v;
     }
     try {
         const embedUrl = `${P.PLAYER}${P.P_EMBED}${anilist}/${ep}/${audio}`;
         const embed = await soraText(embedUrl, { Referer: `${P.PLAYER}/` });
-        if (!embed) { console.log("fuente:", audio, "sin pagina del proveedor"); return vacio; }
+        if (!embed) { aviso(audio, "sin pagina del proveedor"); return vacio; }
         const ticket = (embed.match(new RegExp(P.MASTER_TICKET + "\\s*=\\s*\"([^\"]+)\"")) || [])[1];
-        if (!ticket) { console.log("fuente:", audio, "la pagina no trae ticket"); return vacio; }
+        if (!ticket) { aviso(audio, "la pagina no trae ticket:", embed.length, "b"); return vacio; }
+        aviso(audio, "ticket", ticket.length, "caracteres");
 
         const boot = await soraJsonLog(`${P.PLAYER}${P.P_BOOT}`, {
             Referer: embedUrl,
@@ -163,11 +168,12 @@ async function opcionesDeServidor(anilist, ep, audio, forzar) {
             "Content-Type": "application/json"
         }, "POST", "", `${audio} bootstrap`);
         const nonce = boot && boot.embedNonce ? boot.embedNonce : "";
+        aviso(audio, "nonce:", nonce ? "si" : "no");
 
         const cabeceras = { Referer: `${P.PLAYER}/` };
         if (nonce) cabeceras[P.H_NONCE] = nonce;
         const data = await soraJsonLog(`${P.PLAYER}${P.P_DATA}?id=${anilist}&episode=${ep}&season=1&audio=${audio}`, cabeceras, "GET", null, `${audio} catalogo`);
-        if (!data || !data.providers) { console.log("fuente:", audio, "sin datos del proveedor"); return vacio; }
+        if (!data || !data.providers) { aviso("fuente:", audio, "sin datos del proveedor"); return vacio; }
 
         const streams = [];
         const subs = [];
@@ -198,7 +204,7 @@ async function opcionesDeServidor(anilist, ep, audio, forzar) {
         if (streams.length > 0) CACHE[clave] = { t: Date.now(), v: salida };
         return salida;
     } catch (error) {
-        console.log("fuente:", audio, "error");
+        aviso("fuente:", audio, "error");
         return vacio;
     }
 }
@@ -206,7 +212,7 @@ async function opcionesDeServidor(anilist, ep, audio, forzar) {
 async function resolverMaster(masterUrl) {
     try {
         const texto = await soraText(masterUrl, { Referer: `${P.PLAYER}/` });
-        if (!texto || texto.indexOf("#EXTM3U") !== 0) { console.log("master: sin playlist"); return []; }
+        if (!texto || texto.indexOf("#EXTM3U") !== 0) { aviso("master: sin playlist"); return []; }
         const salida = [];
         const lineas = texto.split("\n");
         for (let i = 0; i < lineas.length; i++) {
@@ -219,7 +225,7 @@ async function resolverMaster(masterUrl) {
         if (salida.length === 0 && texto.indexOf("#EXTINF") > -1) salida.push({ url: masterUrl, calidad: "" });
         return salida.slice(0, 2);
     } catch (error) {
-        console.log("master: error");
+        aviso("master: error");
         return [];
     }
 }
@@ -253,15 +259,15 @@ function normalizar(url) {
 async function soraJsonLog(url, headers, method, body, etiqueta) {
     try {
         const resp = await soraFetch(url, { headers: headers || {}, method: method || "GET", body: body ?? null });
-        if (!resp) { console.log("fuente:", etiqueta, "sin respuesta"); return null; }
+        if (!resp) { aviso("fuente:", etiqueta, "sin respuesta"); return null; }
         let texto = "";
         try { texto = await resp.text(); } catch (error) { texto = ""; }
         if (resp.status && resp.status !== 200) {
-            console.log("fuente:", etiqueta, "respondio", resp.status, String(texto).slice(0, 100));
+            aviso("fuente:", etiqueta, "respondio", resp.status, String(texto).slice(0, 100));
         }
-        try { return JSON.parse(texto); } catch (error) { console.log("fuente:", etiqueta, "sin JSON"); return null; }
+        try { return JSON.parse(texto); } catch (error) { aviso("fuente:", etiqueta, "sin JSON"); return null; }
     } catch (error) {
-        console.log("fuente:", etiqueta, "error");
+        aviso("fuente:", etiqueta, "error");
         return null;
     }
 }
@@ -269,8 +275,10 @@ async function soraJsonLog(url, headers, method, body, etiqueta) {
 async function soraText(url, headers) {
     try {
         const resp = await soraFetch(url, { headers: headers || {} });
-        if (!resp) return null;
-        return await resp.text();
+        if (!resp) { aviso("sin respuesta de", String(url).slice(0, 80)); return null; }
+        const texto = await resp.text();
+        if (resp.status && resp.status !== 200) aviso("respondio", resp.status, "->", String(texto).slice(0, 110));
+        return texto;
     } catch (error) {
         return null;
     }
