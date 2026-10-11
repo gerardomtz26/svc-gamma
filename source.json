@@ -1,0 +1,19 @@
+{
+    "sourceName": "Gamma",
+    "author": {
+        "name": "G",
+        "icon": "https://raw.githubusercontent.com/gerardomtz26/svc-gamma/main/icon.png"
+    },
+    "iconUrl": "https://raw.githubusercontent.com/gerardomtz26/svc-gamma/main/icon.png",
+    "version": "1.0.0",
+    "language": "English",
+    "streamType": "HLS",
+    "quality": "1080p",
+    "baseUrl": "https://raw.githubusercontent.com/gerardomtz26/svc-gamma/main/",
+    "searchBaseUrl": "https://raw.githubusercontent.com/gerardomtz26/svc-gamma/main/source.json",
+    "scriptUrl": "https://raw.githubusercontent.com/gerardomtz26/svc-gamma/main/source.js",
+    "asyncJS": true,
+    "multiStream": true,
+    "multiSubs": true,
+    "type": "anime"
+}
