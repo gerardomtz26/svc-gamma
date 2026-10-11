@@ -183,14 +183,14 @@ async function opcionesDeServidor(anilist, ep, audio, forzar) {
                 const master = `${P.PLAYER}${P.P_FILE}${q.token}.m3u8`;
                 const variantes = await resolverMaster(master, embedUrl);
                 if (variantes.length === 0) {
-                    streams.push({ title: etiqueta, streamUrl: master, headers: { Referer: `${P.PLAYER}/` } });
+                    streams.push({ title: etiqueta, streamUrl: master, headers: cabecerasStream() });
                     continue;
                 }
                 for (const v of variantes) {
                     streams.push({
                         title: v.calidad && variantes.length > 1 ? `${etiqueta} ${v.calidad}` : etiqueta,
                         streamUrl: v.url,
-                        headers: {}
+                        headers: cabecerasStream()
                     });
                 }
             }
@@ -252,6 +252,14 @@ function normalizar(url) {
     m = texto.match(/(?:details\/|anime\/)(.+)-([^-?&#\/]+)$/);
     if (m) return { titulo: m[1], id: m[2], ep: "1" };
     return null;
+}
+
+function cabecerasStream() {
+    const h = {};
+    h["Origin"] = P.PLAYER;
+    h["Referer"] = `${P.PLAYER}/`;
+    h["User-Agent"] = P.UA;
+    return h;
 }
 
 function cabecerasProveedor(embedUrl) {
