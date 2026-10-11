@@ -14,6 +14,8 @@ const S = {
     MASTER_TICKET: _d("GRQUDwgPCRoLBA8SGBAeDw=="),
     H_BOOT: _d("A3YPKSIeNjk+P3YZNDQvKC8pOis="),
     H_NONCE: _d("A3YeNjk+P3YVNDU4Pg=="),
+    UA: _d("FjQhMjc3OnRudWt7cxY6ODI1LzQoM2B7EjUvPjd7Fjo4exQIewN7amsEam4EbHJ7GisrNz4MPjkQMi90bmhsdWhte3MQEw8WF3d7NzIwPnscPjgwNHJ7GDMpNDY+dGpoanVrdWt1a3sIOj06KTJ0bmhsdWht"),
+    CACHE_MS: 1500000,
     ANILIST_VAR: _d("OjUyNzIoLxI/"),
     H_SUB: _d("PzovOnYzOih2KC45"),
     H_DUB: _d("PzovOnYzOih2Py45"),
@@ -111,14 +113,19 @@ async function extractStreamUrl(url) {
         const haySub = ((bloqueEp.match(new RegExp(P.H_SUB + '="(\\d)"')) || [])[1] || "0") === "1";
         const hayDub = ((bloqueEp.match(new RegExp(P.H_DUB + '="(\\d)"')) || [])[1] || "0") === "1";
 
+        const audios = [];
+        if (haySub) audios.push("sub");
+        if (hayDub) audios.push("dub");
+        if (audios.length === 0) audios.push("sub");
+
         const streams = [];
         let subs = [];
-        for (const audio of ["sub", "dub"]) {
-            if (audio === "sub" && !haySub) continue;
-            if (audio === "dub" && !hayDub) continue;
-            const res = await opcionesDeServidor(anilist, ep, audio);
-            streams.push(...res.streams);
-            if (subs.length === 0 && res.subs.length > 0) subs = res.subs;
+        for (let pasada = 0; pasada < 2 && streams.length === 0; pasada++) {
+            for (const audio of audios) {
+                const res = await opcionesDeServidor(anilist, ep, audio, pasada > 0);
+                streams.push(...res.streams);
+                if (subs.length === 0 && res.subs.length > 0) subs = res.subs;
+            }
         }
 
         if (streams.length === 0) { console.log("fuente: el proveedor no devolvio opciones"); return null; }
@@ -133,8 +140,15 @@ async function extractStreamUrl(url) {
     }
 }
 
-async function opcionesDeServidor(anilist, ep, audio) {
+const CACHE = {};
+
+async function opcionesDeServidor(anilist, ep, audio, forzar) {
     const vacio = { streams: [], subs: [] };
+    const clave = `${anilist}|${ep}|${audio}`;
+    if (!forzar && CACHE[clave] && Date.now() - CACHE[clave].t < P.CACHE_MS) {
+        console.log("fuente:", audio, "de la memoria del dia");
+        return CACHE[clave].v;
+    }
     try {
         const embedUrl = `${P.PLAYER}${P.P_EMBED}${anilist}/${ep}/${audio}`;
         const embed = await soraText(embedUrl, { Referer: `${P.PLAYER}/` });
@@ -179,7 +193,9 @@ async function opcionesDeServidor(anilist, ep, audio) {
                 if (c.url) subs.push(c.label || c.lang || "Subtitulo", c.url);
             }
         }
-        return { streams: streams, subs: subs };
+        const salida = { streams: streams, subs: subs };
+        if (streams.length > 0) CACHE[clave] = { t: Date.now(), v: salida };
+        return salida;
     } catch (error) {
         console.log("fuente:", audio, "error");
         return vacio;
@@ -238,11 +254,13 @@ async function soraFetch(url, options = {}) {
     const headers = options.headers || {};
     const method = options.method || "GET";
     const body = options.body ?? null;
+    const cabeceras = { "User-Agent": P.UA };
+    for (const k in headers) cabeceras[k] = headers[k];
     try {
-        return await fetchv2(url, headers, method, body);
+        return await fetchv2(url, cabeceras, method, body);
     } catch (e) {
         try {
-            return await fetch(url, { headers: headers, method: method, body: body });
+            return await fetch(url, { headers: cabeceras, method: method, body: body });
         } catch (error) {
             return null;
         }

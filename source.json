@@ -5,7 +5,7 @@
         "icon": "https://raw.githubusercontent.com/gerardomtz26/svc-gamma/main/icon.png"
     },
     "iconUrl": "https://raw.githubusercontent.com/gerardomtz26/svc-gamma/main/icon.png",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "language": "English",
     "streamType": "HLS",
     "quality": "1080p",
