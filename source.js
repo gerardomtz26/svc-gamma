@@ -422,7 +422,66 @@ async function opcionesRyu(anilist, ep, audio) {
 
         const h2 = cabecerasRyu();
         h2["Referer"] = paginaUrl;
-        h2["Accept"] = "**";
+        h2["Accept"] = "*" + "/" + "*";
+        h2["X-Requested-With"] = "XMLHttpRequest";
+        const datos = await soraJsonLog(P.R_FUENTE + id, h2, "GET", null, "ryu " + audio);
+        if (!datos) { aviso("ryu:", audio, "sin respuesta"); return vacio; }
+
+        const claro = descifrarRyu(datos.enc || "");
+        if (!claro || !claro.file) { aviso("ryu:", audio, "sin direccion"); return vacio; }
+
+        const streams = [{ title: P.R_SERVIDOR + " · (" + (audio === "sub" ? "Sub" : "Dub") + ")", streamUrl: claro.file, headers: cabecerasRyu() }];
+        const subs = [];
+        for (const t of (datos.tracks || [])) if (t.file) subs.push(t.label || "Subtitulo", t.file);
+        const salida = { streams: streams, subs: subs };
+        CACHE[clave] = { t: Date.now(), v: salida };
+        aviso("ryu:", audio, "listo");
+        return salida;
+    } catch (error) {
+        aviso("ryu:", audio, "error");
+        return vacio;
+    }
+}
+
+function limpiar(texto) {
+    return String(texto || "")
+        .replace(/&amp;/g, "&").replace(/&apos;/g, "'").replace(/&#0?39;/g, "'")
+        .replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+        .replace(/\s+/g, " ").trim();
+}
+
+function normalizar(url) {
+    const texto = String(url || "");
+    let m = texto.match(/anime\/(.*)\/([^\/]+)\/(\d+)$/);
+    if (m) return { titulo: m[1], id: m[2], ep: m[3] };
+
+    const corte = texto.indexOf(P.EPISODE);
+    if (corte > -1) {
+        const antes = texto.slice(0, corte);
+        const resto = texto.slice(corte + P.EPISODE.length).split(/[-\/?#]/);
+        const sitio = antes.lastIndexOf(P.WATCH);
+        const titulo = sitio > -1 ? antes.slice(sitio + P.WATCH.length) : "";
+        if (titulo && resto[0] && resto[1]) return { titulo: titulo, id: resto[1], ep: resto[0] };
+    }
+
+    m = texto.match(/(?:details\/|anime\/)(.+)-([^-?&#\/]+)$/);
+    if (m) return { titulo: m[1], id: m[2], ep: "1" };
+    return null;
+}
+
+function cabecerasStream() {
+    const h = {};
+    h["Origin"] = P.PLAYER;
+    h["Referer"] = `${P.PLAYER}/`;
+    h["User-Agent"] = P.UA;
+    return h;
+}
+
+function cabecerasProveedor(embedUrl) {
+    const h = {};
+    h["Origin"] = P.PLAYER;
+    h["Referer"] = embedUrl;
+    h["Accept"] = "*" + "/" + "*";
     h["Accept-Language"] = "en-US,en;q=0.9";
     h["sec-fetch-site"] = "same-origin";
     h["sec-fetch-mode"] = "cors";
