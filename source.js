@@ -97,10 +97,11 @@ async function extractEpisodes(url) {
 }
 
 async function extractStreamUrl(url) {
+    console.log("fuente: piden", String(url).slice(0, 150));
     try {
-        const m = String(url).match(/^anime\/(.*)\/([^\/]+)\/(\d+)$/);
-        if (!m) return null;
-        const titulo = m[1], id = m[2], ep = m[3];
+        const partes = normalizar(url);
+        if (!partes) { console.log("fuente: direccion no reconocida"); return null; }
+        const titulo = partes.titulo, id = partes.id, ep = partes.ep;
 
         const watch = `${P.SITE}${P.WATCH}${titulo}${P.EPISODE}${ep}-${id}`;
         const html = await soraText(watch);
@@ -152,20 +153,20 @@ async function opcionesDeServidor(anilist, ep, audio, forzar) {
     try {
         const embedUrl = `${P.PLAYER}${P.P_EMBED}${anilist}/${ep}/${audio}`;
         const embed = await soraText(embedUrl, { Referer: `${P.PLAYER}/` });
-        if (!embed) return vacio;
+        if (!embed) { console.log("fuente:", audio, "sin pagina del proveedor"); return vacio; }
         const ticket = (embed.match(new RegExp(P.MASTER_TICKET + "\\s*=\\s*\"([^\"]+)\"")) || [])[1];
-        if (!ticket) { console.log("fuente:", audio, "sin ticket"); return vacio; }
+        if (!ticket) { console.log("fuente:", audio, "la pagina no trae ticket"); return vacio; }
 
-        const boot = await soraJson(`${P.PLAYER}${P.P_BOOT}`, {
+        const boot = await soraJsonLog(`${P.PLAYER}${P.P_BOOT}`, {
             Referer: embedUrl,
             [P.H_BOOT]: ticket,
             "Content-Type": "application/json"
-        }, "POST", "");
+        }, "POST", "", `${audio} bootstrap`);
         const nonce = boot && boot.embedNonce ? boot.embedNonce : "";
 
         const cabeceras = { Referer: `${P.PLAYER}/` };
         if (nonce) cabeceras[P.H_NONCE] = nonce;
-        const data = await soraJson(`${P.PLAYER}${P.P_DATA}?id=${anilist}&episode=${ep}&season=1&audio=${audio}`, cabeceras);
+        const data = await soraJsonLog(`${P.PLAYER}${P.P_DATA}?id=${anilist}&episode=${ep}&season=1&audio=${audio}`, cabeceras, "GET", null, `${audio} catalogo`);
         if (!data || !data.providers) { console.log("fuente:", audio, "sin datos del proveedor"); return vacio; }
 
         const streams = [];
@@ -228,6 +229,41 @@ function limpiar(texto) {
         .replace(/&amp;/g, "&").replace(/&apos;/g, "'").replace(/&#0?39;/g, "'")
         .replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">")
         .replace(/\s+/g, " ").trim();
+}
+
+function normalizar(url) {
+    const texto = String(url || "");
+    let m = texto.match(/anime\/(.*)\/([^\/]+)\/(\d+)$/);
+    if (m) return { titulo: m[1], id: m[2], ep: m[3] };
+
+    const corte = texto.indexOf(P.EPISODE);
+    if (corte > -1) {
+        const antes = texto.slice(0, corte);
+        const resto = texto.slice(corte + P.EPISODE.length).split(/[-\/?#]/);
+        const sitio = antes.lastIndexOf(P.WATCH);
+        const titulo = sitio > -1 ? antes.slice(sitio + P.WATCH.length) : "";
+        if (titulo && resto[0] && resto[1]) return { titulo: titulo, id: resto[1], ep: resto[0] };
+    }
+
+    m = texto.match(/(?:details\/|anime\/)(.+)-([^-?&#\/]+)$/);
+    if (m) return { titulo: m[1], id: m[2], ep: "1" };
+    return null;
+}
+
+async function soraJsonLog(url, headers, method, body, etiqueta) {
+    try {
+        const resp = await soraFetch(url, { headers: headers || {}, method: method || "GET", body: body ?? null });
+        if (!resp) { console.log("fuente:", etiqueta, "sin respuesta"); return null; }
+        let texto = "";
+        try { texto = await resp.text(); } catch (error) { texto = ""; }
+        if (resp.status && resp.status !== 200) {
+            console.log("fuente:", etiqueta, "respondio", resp.status, String(texto).slice(0, 100));
+        }
+        try { return JSON.parse(texto); } catch (error) { console.log("fuente:", etiqueta, "sin JSON"); return null; }
+    } catch (error) {
+        console.log("fuente:", etiqueta, "error");
+        return null;
+    }
 }
 
 async function soraText(url, headers) {
