@@ -24,7 +24,7 @@ const S = {
     R_ANIME: _d("My8vKyhhdHQ2Pjw6Kzc6InU5LiEhdCgvKT46NnQ6NTJ0"),
     R_FUENTE: _d("My8vKyhhdHQ2Pjw6Kzc6InU5LiEhdCgvKT46NnQ8Pi8INC4pOD4oZDI/Zg=="),
     R_SITIO: _d("My8vKyhhdHQ2Pjw6Kzc6InU5LiEhdA=="),
-    R_ID: _d("PzovOnYyP2YH")",
+    R_ID: _d("PzovOnYyP2Y="),
     R_CLAVE: _d("MmQXFg8aI2sKbXdhJm5rDg=="),
     R_VECTOR: _d("DGtgaWwPNDoOKzcEC358OA==")
 };
@@ -366,13 +366,6 @@ function bytesDeB64url(texto) {
     return out;
 }
 
-function textoDeBytes(bytes) {
-    let s = "";
-    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-    return decodeURIComponent(escape(s));
-}
-
-
 function claveEnBytes(texto, n) {
     const b = new Array(n);
     for (let i = 0; i < n; i++) b[i] = i < texto.length ? (texto.charCodeAt(i) & 255) : 0;
@@ -424,7 +417,7 @@ async function opcionesRyu(anilist, ep, audio) {
         const pagina = await soraText(paginaUrl, h1);
         if (!pagina) { aviso("ryu:", audio, "sin pagina"); return vacio; }
         aviso("ryu:", audio, "pagina", pagina.length, "b | con data-id:", pagina.indexOf(P.R_ID) > -1);
-        const id = (pagina.match(new RegExp(P.R_ID + "(\\d+)\"")) || [])[1];
+        const id = (pagina.match(new RegExp(P.R_ID + '"([0-9]+)"')) || [])[1];
         if (!id) { aviso("ryu:", audio, "sin id interno"); return vacio; }
 
         const h2 = cabecerasRyu();
