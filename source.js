@@ -156,24 +156,22 @@ async function opcionesDeServidor(anilist, ep, audio, forzar) {
     }
     try {
         const embedUrl = `${P.PLAYER}${P.P_EMBED}${anilist}/${ep}/${audio}`;
-        const embed = await soraText(embedUrl, { Referer: `${P.PLAYER}/` });
+        const embed = await soraText(embedUrl, cabecerasProveedor(embedUrl));
         if (!embed) { aviso(audio, "sin pagina del proveedor"); return vacio; }
         const ticket = (embed.match(new RegExp(P.MASTER_TICKET + "\\s*=\\s*\"([^\"]+)\"")) || [])[1];
         if (!ticket) { aviso(audio, "la pagina no trae ticket:", embed.length, "b"); return vacio; }
         aviso(audio, "ticket", ticket.length, "caracteres");
 
-        const boot = await soraJsonLog(`${P.PLAYER}${P.P_BOOT}`, {
-            Referer: embedUrl,
-            [P.H_BOOT]: ticket,
-            "Content-Type": "application/json"
-        }, "POST", "", `${audio} bootstrap`);
+        const hb = cabecerasProveedor(embedUrl);
+        hb[P.H_BOOT] = ticket;
+        const boot = await soraJsonLog(`${P.PLAYER}${P.P_BOOT}`, hb, "POST", "", `${audio} bootstrap`);
         const nonce = boot && boot.embedNonce ? boot.embedNonce : "";
         aviso(audio, "nonce:", nonce ? "si" : "no");
 
-        const cabeceras = { Referer: `${P.PLAYER}/` };
-        if (nonce) cabeceras[P.H_NONCE] = nonce;
-        const data = await soraJsonLog(`${P.PLAYER}${P.P_DATA}?id=${anilist}&episode=${ep}&season=1&audio=${audio}`, cabeceras, "GET", null, `${audio} catalogo`);
-        if (!data || !data.providers) { aviso("fuente:", audio, "sin datos del proveedor"); return vacio; }
+        const hc = cabecerasProveedor(embedUrl);
+        if (nonce) hc[P.H_NONCE] = nonce;
+        const data = await soraJsonLog(`${P.PLAYER}${P.P_DATA}?id=${anilist}&episode=${ep}&season=1&audio=${audio}`, hc, "GET", null, `${audio} catalogo`);
+        if (!data || !data.providers) { aviso(audio, "sin datos del proveedor"); return vacio; }
 
         const streams = [];
         const subs = [];
@@ -183,7 +181,7 @@ async function opcionesDeServidor(anilist, ep, audio, forzar) {
                 if (!q.token) continue;
                 const etiqueta = `${nombre} · ${q.name || "Auto"} (${audio === "sub" ? "Sub" : "Dub"})`;
                 const master = `${P.PLAYER}${P.P_FILE}${q.token}.m3u8`;
-                const variantes = await resolverMaster(master);
+                const variantes = await resolverMaster(master, embedUrl);
                 if (variantes.length === 0) {
                     streams.push({ title: etiqueta, streamUrl: master, headers: { Referer: `${P.PLAYER}/` } });
                     continue;
@@ -209,9 +207,9 @@ async function opcionesDeServidor(anilist, ep, audio, forzar) {
     }
 }
 
-async function resolverMaster(masterUrl) {
+async function resolverMaster(masterUrl, embedUrl) {
     try {
-        const texto = await soraText(masterUrl, { Referer: `${P.PLAYER}/` });
+        const texto = await soraText(masterUrl, cabecerasProveedor(embedUrl));
         if (!texto || texto.indexOf("#EXTM3U") !== 0) { aviso("master: sin playlist"); return []; }
         const salida = [];
         const lineas = texto.split("\n");
@@ -254,6 +252,20 @@ function normalizar(url) {
     m = texto.match(/(?:details\/|anime\/)(.+)-([^-?&#\/]+)$/);
     if (m) return { titulo: m[1], id: m[2], ep: "1" };
     return null;
+}
+
+function cabecerasProveedor(embedUrl) {
+    const h = {};
+    h["Origin"] = P.PLAYER;
+    h["Referer"] = embedUrl;
+    h["Accept"] = "*/*";
+    h["Accept-Language"] = "en-US,en;q=0.9";
+    h["sec-fetch-site"] = "same-origin";
+    h["sec-fetch-mode"] = "cors";
+    h["sec-fetch-dest"] = "empty";
+    h["Priority"] = "u=1, i";
+    h["Cache-Control"] = "no-cache";
+    return h;
 }
 
 async function soraJsonLog(url, headers, method, body, etiqueta) {
